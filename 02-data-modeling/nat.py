@@ -1,59 +1,67 @@
 class Nat(object):
 
-    def __init__(self, v):
-        if isinstance(v, int) and v >= 0:
-            self.value = v
-        else:
-            raise TypeError("Not a natural number")
-
     @classmethod
     def from_int(cls, number):
-        return Nat(number) 
-
-    def __str__(self):
-        return str(self.value)
-
-    def is_zero(self):
-        return self.value == 0
-
-    def predecessor(self):
-        if self.value:
-            return Nat(self.value - 1)
-        raise NotImplemented("First natural number is zero!")
+        n = Zero()
+        for i in range(number):
+            n = n.successor()
+        return n
 
     def successor(self):
-        return Nat(self.value + 1)
+        return Succ(self)
 
     def __add__(self, other):
-        return self.value + other.value
+        return  self.predecessor() +  other.successor()
 
     def __sub__(self, other):
-        return self.value - other.value 
-   
+        return self.predecessor() + other.predecessor()
+
     def __mul__(self, other):
-        return self.value * other.value
+         return self + other.predecessor * self
 
     def __div__(self, other):
-        return self.value / other.value
-
-    # add +, -, *, /
+        if isinstance(other, Zero):
+            raise ZeroDivisionError
+        return Nat.from_int(1) + (self - other) / other
 
 
 class Zero(Nat):
+    is_zero = True
 
-    def __init__(self):
-        object.__setattr__(self, "value", 0)
+    def is_zero(self):
+        return is_zero
 
-    def __setattr__(self, *args):
-        raise TypeError("Object is immutable")
-   
+    def predecessor(self):
+        raise Exception
+
+    def to_int(self):
+        return 0
+
+    def __add__(self, other):
+        return other
+
+    def __mul__(self, other):
+        return self
+
+    def __div__(self, other):
+        return self
 
 class Succ(Nat):
+    is_zero = False
 
-    def __init__(self, nat):
-        self.value = nat.value + 1
-    
+    def is_zero(self):
+        return is_zero
 
-# zero = Zero()
+    def __init__(self, predecessor):
+        self._predecessor = predecessor
 
-# one = Succ(zero)
+    def predecessor(self):
+        return self._predecessor
+
+    def to_int(self):
+        return 1 + self.predecessor().to_int()
+
+
+zero = Zero()
+
+one = zero.successor()
