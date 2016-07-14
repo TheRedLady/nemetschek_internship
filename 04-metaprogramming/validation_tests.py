@@ -2,13 +2,15 @@ import unittest
 import collections
 import validation as v
 
+
 class TestValidation(unittest.TestCase):
+
     def test_regular(self):
         self.assertTrue(v.is_number(5))
         self.assertFalse(v.is_number("p"))
         self.assertTrue(v.is_string("five"))
         self.assertFalse(v.is_string(7))
-        self.assertTrue(v.is_instanceof(tuple)((1,2,3)))
+        self.assertTrue(v.is_instanceof(tuple)((1, 2, 3)))
         self.assertTrue(v.is_instanceof(float)(0.5))
         self.assertTrue(v.is_instanceof(list)([5, 6, 7]))
 
@@ -35,11 +37,5 @@ class TestValidation(unittest.TestCase):
             calc(1, 6)
 
 
-
-
-
 if __name__ == "__main__":
     unittest.main()
-
-
-

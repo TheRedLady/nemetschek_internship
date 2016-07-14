@@ -11,11 +11,11 @@ def calc(x, y):
 
 
 def is_number(n):
-    return is_instanceof(numbers.Number)(n) # return isinstance(n, numbers.Number)
+    return is_instanceof(numbers.Number)(n)  # return isinstance(n, numbers.Number)
 
 
 def is_string(n):
-    return is_instanceof(str)(n) # return isinstance(n, str)
+    return is_instanceof(str)(n)  # return isinstance(n, str)
 
 
 def is_instanceof(type):
@@ -34,7 +34,7 @@ def arg(name, validators):
 def validate(*validators):
     def decorator(f):
         def check(*args):
-            arg_dict =  f.__code__.co_varnames
+            arg_dict = f.__code__.co_varnames
             arg_dict = {name: value for name, value in zip(arg_dict, args)}
             for item in validators:
                 if not item(arg_dict):
