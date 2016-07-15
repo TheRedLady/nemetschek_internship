@@ -1,0 +1,45 @@
+,-   |
+,_   | swithch lines
+
+S    | split line
+
+vv   | select contents of current line
+
+Q    | format contents
+ql   | reformat line
+
+Y    | yank to the end of line
+D    | delete to the end of line
+
+C-e  | jump to the end of line in insert mode
+
+g;   | jump to prev edit
+g,   | jump to next edit
+gI   | move to last place in insert mode
+
+,,   | switch buffers
+,v   | duplicate buffer
+,ew  |
+,es  |
+,ev  |
+,et  | open in new window, horizontal split, vertical split, tab
+C-h  |
+C-j  |
+C-k  |
+C-l  | move between buffers
+,.   | search files
+
+
+In command mode:
+    c-p   | up
+    c-n   | down
+    %%    | current dir
+
+Text objects:
+
+    ir ar | same as i[ a[
+          | 
+    in il | 
+    an al | next last text object (ex.: inb, inw)
+          | 
+    N     | for numbers

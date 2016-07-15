@@ -12,5 +12,5 @@ sudo apt-get install pgadmin3
 curl -sSL https://get.docker.com/ | sh
 
 # run postgres
-docker run --name postgres -e POSTGRES_PASSWORD=postgres -d postgres
+docker run --name postgres -e POSTGRES_PASSWORD=postgres -d -p 5432:5432 postgres
 docker run -it --rm --link postgres:postgres -v $(pwd):/data  -e "PGPASSWORD=postgres" postgres bash -c 'psql -h postgres -U postgres < /data/dbbook.sql'
