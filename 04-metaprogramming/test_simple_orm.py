@@ -56,16 +56,16 @@ class TestModel(unittest.TestCase):
 
     def test_filter(self):
         cursor = Mock()
-        Student.filter(Student.name == 'Ivan')
+        Student.filter(cursor, Student.name == 'Ivan')
         cursor.execute.assert_called_with('SELECT * FROM student WHERE name = "Ivan"')
-        Student.filter(Student.name != 'Ivan')
+        Student.filter(cursor, Student.name != 'Ivan')
         cursor.execute.assert_called_with('SELECT * FROM student WHERE NOT name = "Ivan"')
         Student.filter(
-            or_(Student.name == 'Ivan',Student.name == 'Peter'),
+            cursor, model.Field.or_(Student.name == 'Ivan',Student.name == 'Peter'),
         )
         cursor.execute.assert_called_with('SELECT * FROM student WHERE name = "Ivan" OR name = "Peter"')
         Student.filter(
-            Student.name.startswith('I'),
+            cursor, Student.name.startswith('I'),
         )
         cursor.execute.assert_called_with('SELECT * FROM student WHERE name LIKE "I%"')
 
