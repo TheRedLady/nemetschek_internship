@@ -42,12 +42,10 @@ class TestModel(unittest.TestCase):
         with self.assertRaises(model.ValidationError):
             q.count = 'z'
 
-
     def test_char_filed(self):
         class Answer(model.Model):
 
             text = model.CharField(max_length=10)
-
 
         a = Answer(None)
         a.text = 'a'
@@ -57,18 +55,27 @@ class TestModel(unittest.TestCase):
     def test_filter(self):
         cursor = Mock()
         Student.filter(cursor, Student.name == 'Ivan')
-        cursor.execute.assert_called_with('SELECT * FROM student WHERE name = "Ivan"')
+        cursor.execute.assert_called_with(
+            'SELECT * FROM student WHERE name = :name',
+            {'name': '"Ivan"'})
         Student.filter(cursor, Student.name != 'Ivan')
-        cursor.execute.assert_called_with('SELECT * FROM student WHERE NOT name = "Ivan"')
+        cursor.execute.assert_called_with(
+            'SELECT * FROM student WHERE NOT name = :name',
+            {'name': '"Ivan"'})
         Student.filter(
-            cursor, model.Field.or_(Student.name == 'Ivan',Student.name == 'Peter'),
+            cursor, model.Field.or_(
+                Student.name == 'Ivan', Student.name == 'Peter'),
         )
-        cursor.execute.assert_called_with('SELECT * FROM student WHERE name = "Ivan" OR name = "Peter"')
+        cursor.execute.assert_called_with(
+            'SELECT * FROM student WHERE name = ? OR name = ?',
+            ('"Ivan"',
+             '"Peter"'))
         Student.filter(
             cursor, Student.name.startswith('I'),
         )
-        cursor.execute.assert_called_with('SELECT * FROM student WHERE name LIKE "I%"')
-
+        cursor.execute.assert_called_with(
+            'SELECT * FROM student WHERE name LIKE ":name%"',
+            {'name': 'I'})
 
 
 if __name__ == '__main__':

@@ -1,6 +1,13 @@
+from collections import defaultdict
+
+
+def wrap(txt):
+    return '"' + txt + '"'
+
 
 class ValidationError(Exception):
     pass
+
 
 class Field(object):
 
@@ -8,14 +15,14 @@ class Field(object):
     autocreation_counter = 0
     db_type = ''
 
-    def __init__(self, name=None, primary_key=False, max_length=None, null=True, default=None, autoincrement=False, value=None):
+    def __init__(self, name=None, primary_key=False, max_length=None, null=True,
+                 default=None, autoincrement=False, value=None):
         self.name = name
         self.primary_key = primary_key
         self.value = value
         if self.primary_key:
             self.db_type += ' PRIMARY KEY'
-        self.autoincrement = autoincrement
-        if self.autoincrement:
+        if autoincrement:
             self.db_type += ' AUTOINCREMENT'
             self.value = Field.autocreation_counter
             Field.autocreation_counter += 1
@@ -26,14 +33,14 @@ class Field(object):
         Field.creation_counter += 1
 
     def __get__(self, obj, type=None):
-        if obj == None:
+        if obj is None:
             return self
-        if self.value == None and self.default:
+        if self.value is None and self.default:
             return self.default
         return self.value
 
     def validate(self, value):
-        if value == None:
+        if value is None:
             if self.primary_key or not self.null:
                 raise ValidationError
 
@@ -42,28 +49,35 @@ class Field(object):
         self.value = value
 
     def __eq__(self, value):
-        return self.name + ' = ' + str(value)
+        if isinstance(value, str):
+            value = wrap(value)
+        return self.name + ' = :' + self.name, {self.name: value}
 
     def __ne__(self, value):
-        return 'NOT ' + self.name + ' = ' + str(value)
+        if isinstance(value, str):
+            value = wrap(value)
+        return 'NOT ' + self.name + ' = :' + self.name, {self.name: value}
 
     @classmethod
-    def or_(cls, *args):
-        if len(args) >= 3:
-            pass
-        return args[0] + ' OR ' + args[1]
+    def or_(cls, fst, snd):
+        values = []
+        key, value = fst[1].popitem()
+        values.append(value)
+        key, value = snd[1].popitem()
+        values.append(value)
+        return key + " = ?" + " OR " + key + " = ?", tuple(values)
 
     def startswith(self, val):
-        return self.name + ' LIKE "' + val + '%"'
+        return self.name + ' LIKE ":name%"', {self.name: val}
 
 
 class IntField(Field):
     db_type = 'INTEGER'
 
     def validate(self, value):
-        if value != None and not isinstance(value, int):
+        if value is not None and not isinstance(value, int):
             raise ValidationError
-        if value == None:
+        if value is None:
             if self.primary_key or not self.null:
                 raise ValidationError
 
@@ -72,17 +86,13 @@ class CharField(Field):
     db_type = 'TEXT'
 
     def validate(self, value):
+        if value is None:
+            if self.primary_key or not self.null:
+                raise ValidationError
         if not isinstance(value, str):
             raise ValidationError
         if self.max_length and len(value) > self.max_length:
             raise ValidationError
-
-    def __ne__(self, value):
-        return 'NOT ' + self.name + ' = "' + str(value) + '"'
-
-    def __eq__(self, value):
-        return self.name + ' = "' + str(value) + '"'
-
 
 
 class ModelMetaclass(type):
@@ -113,7 +123,7 @@ class Model(object):
     @classmethod
     def filter(cls, cursor, sub):
         query = 'SELECT * FROM {} WHERE '.format(cls.table_name)
-        cursor.execute(query + sub)
+        cursor.execute(query + sub[0], sub[1])
 
     @classmethod
     def setup_schema(cls, cursor):
@@ -133,12 +143,17 @@ class Model(object):
     def insert(self):
         query = 'INSERT INTO {}'.format(self.table_name)
         for field in self.fields:
-            self.cursor.execute(query + ' (' + field[1].name + ') VALUES (:' + field[1].name + ')', { field[1].name: field[1].value })
+            self.cursor.execute(
+                query +
+                ' (' + field[1].name + ') VALUES (:' + field[1].name + ')',
+                {field[1].name: field[1].value})
 
     def update(self):
         query = 'UPDATE {} SET '.format(self.table_name)
         for field in self.fields:
-            self.cursor.execute(query + field[1].name + ' = :' + field[1].name + ' WHERE id = :id', {field[1].name:field[1].value, 'id':self.id})
+            self.cursor.execute(
+                query + field[1].name + ' = :' + field[1].name + ' WHERE id = :id',
+                {field[1].name: field[1].value, 'id': self.id})
 
     def save(self):
         if self.id:
