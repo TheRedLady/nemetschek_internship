@@ -1,5 +1,6 @@
 import unittest
 from mock import Mock
+import sqlite3
 
 import simple_orm as model
 
@@ -15,6 +16,36 @@ class Student(model.Model):
 
 
 class TestModel(unittest.TestCase):
+
+    def setUp(self):
+        db = sqlite3.connect(':memory:')
+        db_cursor = db.cursor()
+
+        class User(model.Model):
+
+            name = model.CharField()
+            age = model.IntField()
+            is_active = model.BooleanField()
+
+            class Meta:
+                database = db
+
+        User.setup_schema(db_cursor)
+
+        ivan = User(db_cursor, name='Ivan', age=20, is_active=False)
+        ivan_ = User(db_cursor, name='Ivan', age=30, is_active=True)
+        maria = User(db_cursor, name='Maria', age=18, is_active=True)
+        petya = User(db_cursor, name='Petya', age=17, is_active=False)
+        lili = User(db_cursor, name='Lili', age=28, is_active=True)
+        todor = User(db_cursor, name='Todor', age=25, is_active=True)
+        biser = User(db_cursor, name='Biser', age=31, is_active=False)
+
+        self.users = [ivan, ivan_, maria, petya, lili, todor, biser]
+        for user in self.users:
+            user.save()
+
+    def tearDown(self):
+        db.close()
 
     def test_setup(self):
         cursor = Mock()
@@ -77,6 +108,61 @@ class TestModel(unittest.TestCase):
             'SELECT * FROM student WHERE name LIKE ":name%"',
             {'name': 'I'})
 
+    def test_db(self):
+
+        result = User.select().where(User.name == 'Ivan').get()
+        user.Meta.db_cursor.execute.assert_called_with(
+            'SELECT * FROM user WHERE name = :name', {'name': '"Ivan"'})
+
+        with self.assertRaises(model.MultipleResultsError):
+            User.select().where(User.name == 'Ivan').one()
+
+        result = User.select().where(User.name == 'Ivan').first()
+        user.Meta.db_cursor.execute.assert_called_with(
+            'SELECT * FROM user WHERE name = :name', {'name': '"Ivan"'})
+        self.assertIsInstance(result, model.Model)
+
+        result = User.select().where(User.name == 'Pesho').first()
+        self.assertIsNone(result)
+
+
+    def test_select(self):
+
+        result = User.select().where(User.is_active == True).get()
+        result = next(result)
+        self.assertIsInstance(result, collections.Iterable)
+        self.assertIsInstance(next(result), model.Model)
+
+        result = User.select().where(User.name == 'Lili').one()
+        self.assertEqual(result, lili)
+        self.assertTrue(user.Meta.db_cursor.fetchone() is None)
+
+        self.assertIsNone(User.select().where(User.name == 'Georgi').get())
+
+        result = User.select().where(User.name.startswith('M')).get()
+        self.assertEqual(next(result), maria)
+
+        result = User.select().where(User.age.in_(17, 18)).get()
+        result = [item for item in result]
+        self.assertSetEqual(result, [maria, petya])
+
+    def test_combine(self):
+        result = User.select().where(or_(User.name == 'Ivan', User.age > 10)).get()
+        result = [item for item in result]
+        self.assertListEqual(result, self.users)
+
+        result = User.select().where(and_(User.name == 'Ivan', User.age == 20)).get()
+        result = [item for item in result]
+        self.assertListEqual(result, [ivan])
+
+
+    def test_limit(self):
+        result = User.select().where(or_(User.is_active == True, User.age > 20)).limit(1).get()
+        result = [item for item in result]
+        self.assertEqual(len(result), 1)
+
 
 if __name__ == '__main__':
     unittest.main()
+    TestModel.db.close()
+
