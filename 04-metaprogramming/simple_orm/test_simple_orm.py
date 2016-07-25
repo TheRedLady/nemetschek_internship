@@ -1,4 +1,5 @@
 import unittest
+import collections
 from mock import Mock
 import sqlite3
 
@@ -6,7 +7,6 @@ import simple_orm as model
 
 
 class Question(model.Model):
-
     count = model.IntField()
 
 
@@ -15,37 +15,43 @@ class Student(model.Model):
     marks = model.CharField()
 
 
+class User(model.Model):
+    name = model.CharField()
+    age = model.IntField()
+    is_active = model.BooleanField()
+
+    class Meta:
+        database = None
+
+
 class TestModel(unittest.TestCase):
 
     def setUp(self):
-        db = sqlite3.connect(':memory:')
-        db_cursor = db.cursor()
-
-        class User(model.Model):
-
-            name = model.CharField()
-            age = model.IntField()
-            is_active = model.BooleanField()
-
-            class Meta:
-                database = db
-
+        self.db = sqlite3.connect(':memory:')
+        self.db_cursor = self.db.cursor()
+        User.Meta.database = self.db
+        db_cursor = self.db_cursor
         User.setup_schema(db_cursor)
 
         ivan = User(db_cursor, name='Ivan', age=20, is_active=False)
+        ivan.save()
         ivan_ = User(db_cursor, name='Ivan', age=30, is_active=True)
+        ivan_.save()
         maria = User(db_cursor, name='Maria', age=18, is_active=True)
+        maria.save()
         petya = User(db_cursor, name='Petya', age=17, is_active=False)
+        petya.save()
         lili = User(db_cursor, name='Lili', age=28, is_active=True)
+        lili.save()
         todor = User(db_cursor, name='Todor', age=25, is_active=True)
+        todor.save()
         biser = User(db_cursor, name='Biser', age=31, is_active=False)
+        biser.save()
 
-        self.users = [ivan, ivan_, maria, petya, lili, todor, biser]
-        for user in self.users:
-            user.save()
+        User.cursor = self.db_cursor
 
     def tearDown(self):
-        db.close()
+        self.db_cursor.execute('DROP TABLE user')
 
     def test_setup(self):
         cursor = Mock()
@@ -88,19 +94,19 @@ class TestModel(unittest.TestCase):
         Student.filter(cursor, Student.name == 'Ivan')
         cursor.execute.assert_called_with(
             'SELECT * FROM student WHERE name = :name',
-            {'name': '"Ivan"'})
+            {'name': 'Ivan'})
         Student.filter(cursor, Student.name != 'Ivan')
         cursor.execute.assert_called_with(
             'SELECT * FROM student WHERE NOT name = :name',
-            {'name': '"Ivan"'})
+            {'name': 'Ivan'})
         Student.filter(
             cursor, model.Field.or_(
                 Student.name == 'Ivan', Student.name == 'Peter'),
         )
         cursor.execute.assert_called_with(
             'SELECT * FROM student WHERE name = ? OR name = ?',
-            ('"Ivan"',
-             '"Peter"'))
+            ('Ivan',
+             'Peter'))
         Student.filter(
             cursor, Student.name.startswith('I'),
         )
@@ -109,17 +115,16 @@ class TestModel(unittest.TestCase):
             {'name': 'I'})
 
     def test_db(self):
-
         result = User.select().where(User.name == 'Ivan').get()
-        user.Meta.db_cursor.execute.assert_called_with(
-            'SELECT * FROM user WHERE name = :name', {'name': '"Ivan"'})
+        User.cursor.execute.assert_called_with(
+            'SELECT * FROM user WHERE name = :name', {'name': 'Ivan'})
 
         with self.assertRaises(model.MultipleResultsError):
             User.select().where(User.name == 'Ivan').one()
 
         result = User.select().where(User.name == 'Ivan').first()
-        user.Meta.db_cursor.execute.assert_called_with(
-            'SELECT * FROM user WHERE name = :name', {'name': '"Ivan"'})
+        User.cursor.execute.assert_called_with(
+            'SELECT * FROM user WHERE name = :name', {'name': 'Ivan'})
         self.assertIsInstance(result, model.Model)
 
         result = User.select().where(User.name == 'Pesho').first()
@@ -127,9 +132,8 @@ class TestModel(unittest.TestCase):
 
 
     def test_select(self):
-
+        User.cursor = self.db_cursor
         result = User.select().where(User.is_active == True).get()
-        result = next(result)
         self.assertIsInstance(result, collections.Iterable)
         self.assertIsInstance(next(result), model.Model)
 
@@ -164,5 +168,4 @@ class TestModel(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-    TestModel.db.close()
 

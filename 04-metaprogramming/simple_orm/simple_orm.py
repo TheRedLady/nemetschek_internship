@@ -1,5 +1,3 @@
-from collections import defaultdict
-
 
 def wrap(txt):
     return '"' + txt + '"'
@@ -7,6 +5,11 @@ def wrap(txt):
 
 class ValidationError(Exception):
     pass
+
+
+class MultipleResultsError(Exception):
+    pass
+
 
 
 class Field(object):
@@ -25,12 +28,19 @@ class Field(object):
         if autoincrement:
             self.db_type += ' AUTOINCREMENT'
             self.value = Field.autocreation_counter
+            self.creation_counter = Field.autocreation_counter
             Field.autocreation_counter += 1
+        else:
+            self.creation_counter = Field.creation_counter
+            Field.creation_counter += 1
         self.max_length = max_length
         self.null = null
         self.default = default
-        self.creation_counter = Field.creation_counter
-        Field.creation_counter += 1
+
+    def validate(self, value):
+        if value is None:
+            if self.primary_key or not self.null:
+                raise ValidationError
 
     def __get__(self, obj, type=None):
         if obj is None:
@@ -39,23 +49,18 @@ class Field(object):
             return self.default
         return self.value
 
-    def validate(self, value):
-        if value is None:
-            if self.primary_key or not self.null:
-                raise ValidationError
-
     def __set__(self, obj, value):
         self.validate(value)
         self.value = value
 
     def __eq__(self, value):
-        if isinstance(value, str):
-            value = wrap(value)
+#        if isinstance(value, str):
+#            value = wrap(value)
         return self.name + ' = :' + self.name, {self.name: value}
 
     def __ne__(self, value):
-        if isinstance(value, str):
-            value = wrap(value)
+#        if isinstance(value, str):
+#            value = wrap(value)
         return 'NOT ' + self.name + ' = :' + self.name, {self.name: value}
 
     @classmethod
@@ -95,6 +100,26 @@ class CharField(Field):
             raise ValidationError
 
 
+class BooleanField(Field):
+    db_type = 'INTEGER'
+
+    def validate(self, value):
+        if value is None:
+            if self.primary_key or not self.null:
+                raise ValidationError
+        if value not in (True, False):
+            raise ValidationError
+
+    def __get__(self, obj, type=None):
+        if obj is None:
+            return self
+        return True if self.value == 1 else False
+
+    def __set__(self, obj, value):
+        self.validate(value)
+        self.value = 1 if value else 0
+
+
 class ModelMetaclass(type):
     # store fields in class
     # keep track of definition sequence
@@ -121,6 +146,46 @@ class Model(object):
     id = IntField(autoincrement=True, primary_key=True)
 
     @classmethod
+    def row_to_object(cls, row):
+        fields = [field[1] for field in cls.fields]
+        obj_dict = dict(zip(fields, row))
+        return cls.__new__(cls, obj_dict)
+
+
+    @classmethod
+    def select(cls, *args):
+        q = ''
+        if args:
+            for item in args:
+                q += item.name
+                q += ', '
+            q = q[:-1]
+        else:
+            q = '*'
+        cls.query = 'SELECT {} FROM {} '.format(q, cls.table_name)
+        return cls
+
+    @classmethod
+    def where(cls, query):
+        cls.query += 'WHERE ' + query[0]
+        cls.values_dict = query[1]
+        return cls
+
+    @classmethod
+    def get(cls):
+        cls.cursor.execute(cls.query, cls.values_dict)
+        yield cls.row_to_object(cls.cursor.fetchone())
+
+    @classmethod
+    def one(cls):
+        cls.cursor.execute(cls.query, cls.values_dict)
+        result = cls.cursor.fetchone()
+        result = cls.row_to_object(result)
+        if cls.cursor.fetchone() is not None:
+            raise MultipleResultsError
+        return result
+
+    @classmethod
     def filter(cls, cursor, sub):
         query = 'SELECT * FROM {} WHERE '.format(cls.table_name)
         cursor.execute(query + sub[0], sub[1])
@@ -141,12 +206,26 @@ class Model(object):
             setattr(self, name, value)
 
     def insert(self):
-        query = 'INSERT INTO {}'.format(self.table_name)
+        query = 'INSERT INTO {} '.format(self.table_name)
+        field_name_values = []
+        field_values = []
         for field in self.fields:
-            self.cursor.execute(
-                query +
-                ' (' + field[1].name + ') VALUES (:' + field[1].name + ')',
-                {field[1].name: field[1].value})
+            if field[1].name == 'id':
+                continue
+            field_name_values.append(field[1].name)
+            field_values.append(field[1].value)
+        field_names = field_name_values
+        dct = dict(zip(field_names, field_values))
+        if len(field_name_values) > 1:
+            field_names = '(' + ", ".join(field_name_values) + ')'
+            field_name_values = '(' + ", ".join([':' + name for name in field_name_values]) + ')'
+        else:
+            field_names = '(' + field_names[0] + ')'
+            field_name_values = '(:' + field_name_values[0] + ')'
+        for item in dct:
+            item = ':' + item
+        self.cursor.execute(query + field_names +' VALUES ' + field_name_values, dct)
+        self.id_ = IntField(autoincrement=True, primary_key=True)
 
     def update(self):
         query = 'UPDATE {} SET '.format(self.table_name)
