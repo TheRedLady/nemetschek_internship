@@ -1,7 +1,5 @@
-
-def wrap(txt):
-    return '"' + txt + '"'
-
+import collections
+import cursor
 
 class ValidationError(Exception):
     pass
@@ -11,84 +9,104 @@ class MultipleResultsError(Exception):
     pass
 
 
+def or_(left, right):
+    left = cursor.Query(lhs=left['lhs'], operator=left['operator'], rhs=left['rhs'])
+    right = cursor.Query(lhs=right['lhs'], operator=right['operator'], rhs=right['rhs'])
+    return {'lhs': left, 'operator': ' OR ', 'rhs': right}
+
+
+def and_(left, right):
+    left = cursor.Query(lhs=left['lhs'], operator=left['operator'], rhs=left['rhs'])
+    right = cursor.Query(lhs=right['lhs'], operator=right['operator'], rhs=right['rhs'])
+    return {'lhs': left, 'operator': ' AND ', 'rhs': right}
+
+
 
 class Field(object):
 
     creation_counter = 1
     autocreation_counter = 0
-    db_type = ''
 
-    def __init__(self, name=None, primary_key=False, max_length=None, null=True,
-                 default=None, autoincrement=False, value=None):
+    def __init__(self, name=None, primary_key=False, null=True,
+                 default=None, value=None):
         self.name = name
         self.primary_key = primary_key
-        self.value = value
-        if self.primary_key:
-            self.db_type += ' PRIMARY KEY'
-        if autoincrement:
-            self.db_type += ' AUTOINCREMENT'
-            self.value = Field.autocreation_counter
-            self.creation_counter = Field.autocreation_counter
-            Field.autocreation_counter += 1
-        else:
-            self.creation_counter = Field.creation_counter
-            Field.creation_counter += 1
-        self.max_length = max_length
         self.null = null
+        self.value = value
         self.default = default
+        if self.value is None and self.default is not None:
+            self.value = default
+        self.creation_counter = Field.creation_counter
+        Field.creation_counter += 1
 
     def validate(self, value):
-        if value is None:
-            if self.primary_key or not self.null:
-                raise ValidationError
+        pass
 
     def __get__(self, obj, type=None):
         if obj is None:
             return self
-        if self.value is None and self.default:
-            return self.default
-        return self.value
+        else:
+            if hasattr(obj, self.name + '_'):
+                return getattr(obj, self.name + '_')
+            else:
+                raise AttributeError
 
     def __set__(self, obj, value):
         self.validate(value)
-        self.value = value
+        if obj is not None:
+            setattr(obj, self.name + '_', value)
+        else:
+            self.value = value
 
-    def __eq__(self, value):
-#        if isinstance(value, str):
-#            value = wrap(value)
-        return self.name + ' = :' + self.name, {self.name: value}
+    def __eq__(self, other):
+        if isinstance(other, type(self)):
+            return self.value == other.value
+        return {'lhs': self.name, 'operator': '=', 'rhs': other}
 
-    def __ne__(self, value):
-#        if isinstance(value, str):
-#            value = wrap(value)
-        return 'NOT ' + self.name + ' = :' + self.name, {self.name: value}
+    def __ne__(self, other):
+        if isinstance(other, type(self)):
+            return self.value != other.value
+        return {'lhs': 'NOT ' + self.name, 'operator': '=', 'rhs': other}
 
-    @classmethod
-    def or_(cls, fst, snd):
-        values = []
-        key, value = fst[1].popitem()
-        values.append(value)
-        key, value = snd[1].popitem()
-        values.append(value)
-        return key + " = ?" + " OR " + key + " = ?", tuple(values)
+    def __lt__(self, other):
+        if isinstance(other, type(self)):
+            return self.value < other.value
+        return {'lhs': self.name, 'operator': ' < ', 'rhs': other}
 
-    def startswith(self, val):
-        return self.name + ' LIKE ":name%"', {self.name: val}
+    def __gt__(self, other):
+        if isinstance(other, type(self)):
+            return self.value < other.value
+        return {'lhs': self.name, 'operator': ' > ', 'rhs': other}
+
+    def in_(self, *values):
+        return {'lhs': self.name, 'operator': ' IN ', 'rhs' : list(values)}
+
+    def startswith(self, value):
+        value =  value + "%"
+        return {'lhs': self.name, 'operator': ' LIKE ', 'rhs': value}
+
+    def endswith(self, value):
+        value =  "%" + value
+        return {'lhs': self.name, 'operator': ' LIKE ', 'rhs': value}
+
 
 
 class IntField(Field):
-    db_type = 'INTEGER'
 
     def validate(self, value):
-        if value is not None and not isinstance(value, int):
-            raise ValidationError
         if value is None:
             if self.primary_key or not self.null:
                 raise ValidationError
+        if value is not None and not isinstance(value, int):
+            raise ValidationError
 
 
 class CharField(Field):
-    db_type = 'TEXT'
+
+    def __init__(self, min_length=None, max_length=None, **kwargs):
+        self.min_length = min_length
+        self.max_length = max_length
+        super(CharField, self).__init__(**kwargs)
 
     def validate(self, value):
         if value is None:
@@ -98,26 +116,35 @@ class CharField(Field):
             raise ValidationError
         if self.max_length and len(value) > self.max_length:
             raise ValidationError
+        if self.min_length and len(value) < self.min_length:
+            raise ValidationError
+
 
 
 class BooleanField(Field):
-    db_type = 'INTEGER'
 
     def validate(self, value):
         if value is None:
             if self.primary_key or not self.null:
                 raise ValidationError
-        if value not in (True, False):
+        if value not in (True, False, 0, 1):
             raise ValidationError
 
     def __get__(self, obj, type=None):
         if obj is None:
             return self
-        return True if self.value == 1 else False
+        return bool(getattr(obj, self.name + '_'))
 
     def __set__(self, obj, value):
         self.validate(value)
-        self.value = 1 if value else 0
+        if obj is not None:
+            setattr(obj, self.name + '_', value)
+        else:
+            self.value = value
+
+
+class AutoField(IntField):
+    pass
 
 
 class ModelMetaclass(type):
@@ -130,6 +157,8 @@ class ModelMetaclass(type):
             if isinstance(value, Field):
                 value.name = name
                 columns.append((value.creation_counter, value))
+        if 'Meta' not in class_dict:
+            raise AttributeError("Class 'Meta' not provided")
         for parent in bases:
             if isinstance(parent, ModelMetaclass):
                 columns.extend(parent.fields)
@@ -143,99 +172,53 @@ class Model(object):
 
     __metaclass__ = ModelMetaclass
 
-    id = IntField(autoincrement=True, primary_key=True)
+    id = AutoField(primary_key=True)
+
+    class Meta:
+        database = None
 
     @classmethod
     def row_to_object(cls, row):
-        fields = [field[1] for field in cls.fields]
+        if row is None:
+            return row
+        fields = [field.name for field in cls.columns]
         obj_dict = dict(zip(fields, row))
         return cls.__new__(cls, obj_dict)
 
-
     @classmethod
     def select(cls, *args):
-        q = ''
-        if args:
-            for item in args:
-                q += item.name
-                q += ', '
-            q = q[:-1]
-        else:
-            q = '*'
-        cls.query = 'SELECT {} FROM {} '.format(q, cls.table_name)
-        return cls
+        args = [a.name for a in args]
+        return cursor.Query(cls, args)
 
     @classmethod
-    def where(cls, query):
-        cls.query += 'WHERE ' + query[0]
-        cls.values_dict = query[1]
-        return cls
+    def filter(cls, condition):
+        query = cls.select().where(*condition).to_sql()
+        query_set = cls.Meta.database.cursor.fetchall(*query)
+        query_set = [cls.row_to_object(row) for row in query_set]
+        return query_set
 
     @classmethod
-    def get(cls):
-        cls.cursor.execute(cls.query, cls.values_dict)
-        yield cls.row_to_object(cls.cursor.fetchone())
+    def setup_schema(cls):
+        cls.columns = [field[1] for field in cls.fields]
+        cls.Meta.database.create_table(cls)
 
-    @classmethod
-    def one(cls):
-        cls.cursor.execute(cls.query, cls.values_dict)
-        result = cls.cursor.fetchone()
-        result = cls.row_to_object(result)
-        if cls.cursor.fetchone() is not None:
-            raise MultipleResultsError
-        return result
-
-    @classmethod
-    def filter(cls, cursor, sub):
-        query = 'SELECT * FROM {} WHERE '.format(cls.table_name)
-        cursor.execute(query + sub[0], sub[1])
-
-    @classmethod
-    def setup_schema(cls, cursor):
-        fields = ''
-        for col in cls.fields:
-            if fields:
-                fields += ', '
-            fields += col[1].name + ' ' + col[1].db_type
-        query = 'CREATE TABLE {} ({})'.format(cls.table_name, fields)
-        cursor.execute(query)
-
-    def __init__(self, cursor, **kwargs):
-        self.cursor = cursor
+    def __init__(self, **kwargs):
         for name, value in kwargs.items():
-            setattr(self, name, value)
+            if value in (True, False) and self.Meta.database.types['BooleanField'] == 'INTEGER':
+                value = 1 if value else 0
+            setattr(self, name + '_', value)
+
+    def __eq__(self, other):
+        return list(set(self.columns).intersection(other.columns)) == self.columns
 
     def insert(self):
-        query = 'INSERT INTO {} '.format(self.table_name)
-        field_name_values = []
-        field_values = []
-        for field in self.fields:
-            if field[1].name == 'id':
-                continue
-            field_name_values.append(field[1].name)
-            field_values.append(field[1].value)
-        field_names = field_name_values
-        dct = dict(zip(field_names, field_values))
-        if len(field_name_values) > 1:
-            field_names = '(' + ", ".join(field_name_values) + ')'
-            field_name_values = '(' + ", ".join([':' + name for name in field_name_values]) + ')'
-        else:
-            field_names = '(' + field_names[0] + ')'
-            field_name_values = '(:' + field_name_values[0] + ')'
-        for item in dct:
-            item = ':' + item
-        self.cursor.execute(query + field_names +' VALUES ' + field_name_values, dct)
-        self.id_ = IntField(autoincrement=True, primary_key=True)
+        self.Meta.database.insert_table(self)
 
     def update(self):
-        query = 'UPDATE {} SET '.format(self.table_name)
-        for field in self.fields:
-            self.cursor.execute(
-                query + field[1].name + ' = :' + field[1].name + ' WHERE id = :id',
-                {field[1].name: field[1].value, 'id': self.id})
+        self.Meta.database.update_table(self)
 
     def save(self):
-        if self.id:
+        if hasattr(self, 'id_'):
             self.update()
         else:
             self.insert()

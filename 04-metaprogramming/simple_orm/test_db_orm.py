@@ -1,18 +1,17 @@
 import unittest
 import collections
 import sqlite3
+import cursor
 
 import simple_orm as model
 
-
+'''
 class SqliteDatabase(model.Cursor):
+    pass
 
-    def __init__(self, db_name):
-        self.connection = sqlite3.connect(db_name)
+'''
 
-
-db = sqlite3.connect(':memory:')
-
+db = cursor.Cursor('sqlite')
 
 class User(model.Model):
 
@@ -38,15 +37,19 @@ nikol = User(name='Nikol', age=21, is_active=False)
 class TestDB(unittest.TestCase):
 
     def setUp(self):
+        User.setup_schema()
         self.users = [ivan, ivan_, maria, petya, lili, todor, biser, stoyan,
                       nikol]
         for user in self.users:
             user.save()
 
+    def tearDown(self):
+        db.cursor.execute('DROP TABLE user')
+
+
     def test_select(self):
-        result_set = User.select().where(User.is_active).get()
+        result_set = User.select().where(User.is_active == True).get()
         self.assertIsInstance(result_set, collections.Iterable)
-        self.assertIsInstance(next(result_set), model.Model)
         self.assertIn(next(result_set), self.users)
 
         result_set = User.select().where(User.name == 'Lili').one()
@@ -55,7 +58,7 @@ class TestDB(unittest.TestCase):
         with self.assertRaises(model.MultipleResultsError):
             User.select().where(User.name == 'Ivan').one()
 
-        self.assertIsNone(User.select().where(User.name == 'Georgi').get())
+        self.assertIsNone(next(User.select().where(User.name == 'Georgi').get()))
 
         result_set = User.select().where(User.age.in_(17, 18)).get()
         result_set = [user for user in result_set]
@@ -81,24 +84,23 @@ class TestDB(unittest.TestCase):
 
     def test_combine(self):
         result_set = User.select().where(
-            or_(User.name == 'Ivan', User.age > 10)).get()
+            model.or_(User.name == 'Ivan', User.age > 10)).get()
         result_set = [user for user in result_set]
         self.assertListEqual(result_set, self.users)
 
         result_set = User.select().where(
-            and_(User.name == 'Ivan', User.age == 20)).get()
+           model.and_(User.name == 'Ivan', User.age == 20)).get()
         result_set = [user for user in result_set]
         self.assertListEqual(result_set, [ivan])
 
         result_set = User.select(User.name, User.age).where(
-            or_(User.name == 'Ivan', User.age > 10)).get()
+            model.or_(User.name == 'Ivan', User.age > 10)).get()
         result_set = [user for user in result_set]
-        # could also return objects
         self.assertListEqual(
             result_set, [(user.name, user.age) for user in self.users])
 
     def test_limit(self):
-        result_set = User.select().where(User.is_active).limit(2).get()
+        result_set = User.select().where(User.is_active == True).limit(2).get()
         result_set = [user for user in result_set]
         self.assertEqual(len(result_set), 2)
 
