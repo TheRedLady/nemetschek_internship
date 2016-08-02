@@ -1,15 +1,13 @@
 ### Defining model
 
 ```
-    >>> db = SqliteDatabase('people.db')
-
     >>> class User(Model):
     ...     name = CharField()
     ...     age = IntegerField()
     ...     is_active = BooleanField()
     ...
-    ...     class Meta:
-    ...         database = db
+    >>> db = SqliteDatabase('people.db')
+    >>> Injected.inject({'database': db})
     
     >>> db.create_tables(User)
 ```
@@ -88,6 +86,14 @@ Query is executed only on call of `get`, `one` or `first`.
 5. Calling DB functions:
 
 ```
+    @dbfunc('sqlit'):
+    def to_lowercase(field):
+        return 'lower(%s)' % field
+
+    @dbfunc('postgers'):
+    def to_lowercase(field):
+        return 'lower(%s)' % field
+
     >>> User.select(User.name, User.age).where(to_lowercase(User.name) == 'ivan').get()
 ```
 
