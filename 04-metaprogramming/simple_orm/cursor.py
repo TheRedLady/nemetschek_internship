@@ -68,3 +68,7 @@ class Cursor(object):
             field_names = '(:' + field_names[0] + ')'
         self.cursor.execute(query + ' VALUES ' + field_names, values_dict)
 
+    @property
+    def lastrow_id(self):
+        return self.cursor.lastrowid
+

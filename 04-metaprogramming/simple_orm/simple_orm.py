@@ -38,7 +38,9 @@ class Model(object):
             return row
         fields = [field.name for field in cls.columns]
         obj_dict = dict(zip(fields, row))
-        return cls.__new__(cls, obj_dict)
+        obj = object.__new__(cls)
+        cls.__init__(obj, **obj_dict)
+        return obj
 
     @classmethod
     def select(cls, *args):
@@ -64,10 +66,13 @@ class Model(object):
             setattr(self, name + '_', value)
 
     def __eq__(self, other):
-        return list(set(self.columns).intersection(other.columns)) == self.columns
+        if other is None:
+            return False
+        return self.id_ == other.id_
 
     def insert(self):
         self.Meta.database.insert_table(self)
+        self.id_ = self.Meta.database.lastrow_id
 
     def update(self):
         self.Meta.database.update_table(self)

@@ -14,8 +14,6 @@ def and_(left, right):
 
 
 def make_expression(field, lhs, operator, rhs):
-    if hasattr(field, 'lhs'):
-        lhs = field.lhs
     expr = {'lhs': lhs, 'operator': operator, 'rhs': rhs}
     return expr
 

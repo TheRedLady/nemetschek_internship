@@ -35,14 +35,10 @@ nikol = User(name='Nikol', age=21, is_active=False)
 class TestDB(unittest.TestCase):
 
     def setUp(self):
-        User.setup_schema()
         self.users = [ivan, ivan_, maria, petya, lili, todor, biser, stoyan,
                       nikol]
         for user in self.users:
             user.save()
-
-    def tearDown(self):
-        db.cursor.execute('DROP TABLE user')
 
     def test_get(self):
         result_set = User.select().where(User.is_active == True).get()
@@ -52,20 +48,20 @@ class TestDB(unittest.TestCase):
         result_set = User.select().where(User.is_active == True).where(
             User.age < 25).where(User.name.startswith('S')).get()
         result_set = [user for user in result_set]
-        self.assertListEqual(result_set, [stoyan])
+        self.assertSequenceEqual(result_set, [stoyan])
 
         self.assertIsNone(next(User.select().where(User.name == 'Georgi').get()))
 
         result_set = User.select().where(User.age.in_(17, 18)).get()
         result_set = [user for user in result_set]
-        self.assertListEqual(result_set, [maria, petya, stoyan])
+        self.assertSequenceEqual(result_set, [maria, petya, stoyan])
 
         result_set = User.select().where(User.name.startswith('M')).get()
         self.assertEqual(next(result_set), maria)
 
         result_set = User.select().where(User.name.contains('y')).get()
         result_set = [user for user in result_set]
-        self.assertListEqual(result_set, [stoyan, petya])
+        self.assertSequenceEqual(result_set, [petya, stoyan])
 
     def test_one(self):
         result_set = User.select().where(User.name == 'Lili').one()
@@ -82,7 +78,7 @@ class TestDB(unittest.TestCase):
         self.assertEqual(result_set, maria)
 
         result_set = User.select().where(User.is_active == True).first()
-        self.assertEqual(result_set, lili)
+        self.assertEqual(result_set, ivan_)
 
         result_set = User.select().where(User.age >= 50).first()
         self.assertIsNone(result_set)
@@ -91,34 +87,34 @@ class TestDB(unittest.TestCase):
         result_set = User.select().where(
             field.or_(User.name == 'Ivan', User.age > 10)).get()
         result_set = [user for user in result_set]
-        self.assertListEqual(result_set, self.users)
+        self.assertSequenceEqual(result_set, self.users)
 
         result_set = User.select().where(
             field.or_(User.name.contains('i'), User.age < 20)).get()
         result_set = [user for user in result_set]
-        self.assertListEqual(result_set, [ivan, ivan_, nikol, maria, biser, lili, petya, stoyan])
+        self.assertSequenceEqual(result_set, [ivan, ivan_, maria, petya, lili, biser, stoyan, nikol])
 
         result_set = User.select(User.name, User.age).where(
             field.or_(User.name == 'Ivan', User.age > 10)).get()
         result_set = [user for user in result_set]
-        self.assertListEqual(
+        self.assertSequenceEqual(
             result_set, [(user.name, user.age) for user in self.users])
 
     def test_and(self):
         result_set = User.select().where(
            field.and_(User.name == 'Ivan', User.age == 20)).get()
         result_set = [user for user in result_set]
-        self.assertListEqual(result_set, [ivan])
+        self.assertSequenceEqual(result_set, [ivan])
 
         result_set = User.select().where(
            field.and_(User.is_active == True, User.age < 20)).get()
         result_set = [user for user in result_set]
-        self.assertListEqual(result_set, [maria, stoyan])
+        self.assertSequenceEqual(result_set, [maria, stoyan])
 
         result_set = User.select(User.name, User.is_active).where(
            field.and_(User.is_active == False, User.name.endswith('a'))).get()
         result_set = [user for user in result_set]
-        self.assertListEqual(result_set, [(petya.name, petya.is_active)])
+        self.assertSequenceEqual(result_set, [(petya.name, petya.is_active)])
 
     def test_limit(self):
         result_set = User.select().where(User.is_active == True).limit(2).get()
@@ -128,8 +124,10 @@ class TestDB(unittest.TestCase):
         result_set = User.select().where(User.age == 18).limit(4).get()
         result_set = [user for user in result_set]
         self.assertEqual(len(result_set), 2)
-        self.assertListEqual(result_set, [stoyan, maria])
+        self.assertSequenceEqual(result_set, [maria, stoyan])
 
 
 if __name__ == '__main__':
+    User.setup_schema()
     unittest.main()
+    db.cursor.execute('DROP TABLE user')
