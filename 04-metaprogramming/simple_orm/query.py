@@ -7,10 +7,16 @@ def wrap_sequence(iterable):
     return "(" + st + ")"
 
 
-def wrap_values(db_type):
-    if db_type == 'postgre':
-        return wrap_values_postgre
-    return wrap_values_sqlite
+def wrap_dict_sqlite(names):
+    dict_names = [":" + str(name) for name in names]
+    dict_names = ", ".join(dict_names)
+    return "(" + dict_names + ")"
+
+
+def wrap_dict_postgre(names):
+    dict_names = ["%(" + str(name) + ")s" for name in names]
+    dict_names = ", ".join(dict_names)
+    return "(" + dict_names + ")"
 
 
 def wrap_values_sqlite(length):
@@ -27,6 +33,10 @@ def wrap_values_postgre(length):
     st = length * ["%s"]
     st = ', '.join(st)
     return '(' + st + ')'
+
+
+wrap_values = {'sqlite': wrap_values_sqlite, 'postgre': wrap_values_postgre}
+wrap_dict = {'sqlite': wrap_dict_sqlite, 'postgre': wrap_dict_postgre}
 
 
 class MultipleResultsError(Exception):
@@ -59,9 +69,9 @@ class Query(object):
             self.rhs = self.rhs.to_sql()
         else:
             if isinstance(self.rhs, list):
-                self.rhs = wrap_values(self.db_type)(len(self.rhs))
+                self.rhs = wrap_values[self.db_type](len(self.rhs))
             elif self.rhs in self.values:
-                self.rhs = wrap_values(self.db_type)(len([self.rhs]))
+                self.rhs = wrap_values[self.db_type](len([self.rhs]))
             else:
                 self.rhs = str(self.rhs) if self.rhs is not None else ''
         if self.operator is None:

@@ -19,7 +19,7 @@ class ModelMetaclass(type):
                 columns.extend(parent.fields)
         columns.sort()
         class_dict['fields'] = columns
-        class_dict['table_name'] = classname.lower()
+        class_dict['table_name'] = '"' + classname.lower() + '"'
         return type.__new__(metaclass, classname, bases, class_dict)
 
 

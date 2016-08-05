@@ -1,12 +1,19 @@
 import unittest
 import collections
-import sqlite3
 
 import cursor
 import query
 import field as field
 import simple_orm as model
 from inject import Injected
+
+
+def setUp(rows):
+    for row in rows:
+        row.save()
+
+
+db_type = 'sqlite'
 
 
 class User(model.Model):
@@ -17,12 +24,12 @@ class User(model.Model):
     is_active = field.BooleanField()
 
 
-@field.dbfunc('sqlite')
+@field.dbfunc(db_type)
 def max(field):
     return field
 
 
-@field.dbfunc('sqlite')
+@field.dbfunc(db_type)
 def to_lowercase(field):
     return field
 
@@ -37,19 +44,15 @@ biser = User(name='Biser', age=31, is_active=False)
 stoyan = User(name='Stoyan', age=18, is_active=True)
 nikol = User(name='Nikol', age=21, is_active=False)
 
+users = [ivan, ivan_, maria, petya, lili, todor, biser, stoyan, nikol]
+
 
 class TestDB(unittest.TestCase):
-
-    def setUp(self):
-        self.users = [ivan, ivan_, maria, petya, lili, todor, biser, stoyan,
-                      nikol]
-        for user in self.users:
-            user.save()
 
     def test_get(self):
         result_set = User.select().where(User.is_active == True).get()
         self.assertIsInstance(result_set, collections.Iterable)
-        self.assertIn(next(result_set), self.users)
+        self.assertIn(next(result_set), users)
 
         result_set = User.select().where(to_lowercase(User.name) == 'ivan').get()
         result_set = [user for user in result_set]
@@ -100,7 +103,7 @@ class TestDB(unittest.TestCase):
         result_set = User.select().where(
             field.or_(User.name == 'Ivan', User.age > 10)).get()
         result_set = [user for user in result_set]
-        self.assertSequenceEqual(result_set, self.users)
+        self.assertSequenceEqual(result_set, users)
 
         result_set = User.select().where(
             field.or_(User.name == 'Ivan', User.age < 18, User.name == 'Biser')).get()
@@ -110,13 +113,16 @@ class TestDB(unittest.TestCase):
         result_set = User.select().where(
             field.or_(User.name.contains('i'), User.age < 20)).get()
         result_set = [user for user in result_set]
-        self.assertSequenceEqual(result_set, [ivan, ivan_, maria, petya, lili, biser, stoyan, nikol])
+        if db_type == 'sqlite':
+            self.assertSequenceEqual(result_set, [ivan, ivan_, maria, petya, lili, biser, stoyan, nikol])
+        else:
+            self.assertSequenceEqual(result_set, [maria, petya, lili, biser, stoyan, nikol])
 
         result_set = User.select(User.name, User.age).where(
             field.or_(User.name == 'Ivan', User.age > 10)).get()
         result_set = [user for user in result_set]
         self.assertSequenceEqual(
-            result_set, [(user.name, user.age) for user in self.users])
+            result_set, [(user.name, user.age) for user in users])
 
     def test_and(self):
         result_set = User.select().where(
@@ -151,7 +157,12 @@ class TestDB(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    Injected.inject(db_type='sqlite')
+    if db_type == 'postgre':
+        Injected.inject(db_type=db_type, database='postgres', user='postgres', password='postgres', host='localhost', port=5432)
+    else:
+        Injected.inject(db_type=db_type)
     User.setup_schema()
+    setUp(users)
     unittest.main()
-    User.database.execute('DROP TABLE user')
+    User.database.cursor.execute('DROP TABLE "user"')
+
