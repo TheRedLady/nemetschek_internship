@@ -6,19 +6,25 @@ import cursor
 import query
 import field as field
 import simple_orm as model
-
-
-db = cursor.Cursor('sqlite')
+from inject import Injected
 
 
 class User(model.Model):
+    database = Injected('database')
 
     name = field.CharField()
     age = field.IntField()
     is_active = field.BooleanField()
 
-    class Meta:
-        database = db
+
+@field.dbfunc('sqlite')
+def max(field):
+    return field
+
+
+@field.dbfunc('sqlite')
+def to_lowercase(field):
+    return field
 
 
 ivan = User(name='Ivan', age=20, is_active=False)
@@ -44,6 +50,13 @@ class TestDB(unittest.TestCase):
         result_set = User.select().where(User.is_active == True).get()
         self.assertIsInstance(result_set, collections.Iterable)
         self.assertIn(next(result_set), self.users)
+
+        result_set = User.select().where(to_lowercase(User.name) == 'ivan').get()
+        result_set = [user for user in result_set]
+        self.assertSequenceEqual(result_set, [ivan, ivan_])
+
+        result_set = User.select(max(User.age)).get()
+        self.assertEqual(next(result_set)[0], 31)
 
         result_set = User.select().where(User.is_active == True).where(
             User.age < 25).where(User.name.startswith('S')).get()
@@ -90,6 +103,11 @@ class TestDB(unittest.TestCase):
         self.assertSequenceEqual(result_set, self.users)
 
         result_set = User.select().where(
+            field.or_(User.name == 'Ivan', User.age < 18, User.name == 'Biser')).get()
+        result_set = [user for user in result_set]
+        self.assertSequenceEqual(result_set, [ivan, ivan_, petya, biser])
+
+        result_set = User.select().where(
             field.or_(User.name.contains('i'), User.age < 20)).get()
         result_set = [user for user in result_set]
         self.assertSequenceEqual(result_set, [ivan, ivan_, maria, petya, lili, biser, stoyan, nikol])
@@ -103,6 +121,11 @@ class TestDB(unittest.TestCase):
     def test_and(self):
         result_set = User.select().where(
            field.and_(User.name == 'Ivan', User.age == 20)).get()
+        result_set = [user for user in result_set]
+        self.assertSequenceEqual(result_set, [ivan])
+
+        result_set = User.select().where(
+           field.and_(User.name == 'Ivan', User.age == 20, User.is_active == False)).get()
         result_set = [user for user in result_set]
         self.assertSequenceEqual(result_set, [ivan])
 
@@ -128,6 +151,7 @@ class TestDB(unittest.TestCase):
 
 
 if __name__ == '__main__':
+    Injected.inject(db_type='sqlite')
     User.setup_schema()
     unittest.main()
-    db.cursor.execute('DROP TABLE user')
+    User.database.execute('DROP TABLE user')

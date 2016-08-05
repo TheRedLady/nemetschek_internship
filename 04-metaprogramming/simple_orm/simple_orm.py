@@ -12,8 +12,8 @@ class ModelMetaclass(type):
             if isinstance(value, Field):
                 value.name = name
                 columns.append((value.creation_counter, value))
-        if 'Meta' not in class_dict:
-            raise AttributeError("Class 'Meta' not provided")
+        if 'database' not in class_dict:
+            raise AttributeError("DB not provided")
         for parent in bases:
             if isinstance(parent, ModelMetaclass):
                 columns.extend(parent.fields)
@@ -29,8 +29,7 @@ class Model(object):
 
     id = AutoField(primary_key=True)
 
-    class Meta:
-        database = None
+    database = None
 
     @classmethod
     def row_to_object(cls, row):
@@ -45,24 +44,25 @@ class Model(object):
     @classmethod
     def select(cls, *args):
         args = [a.name for a in args]
-        return Query(class_=cls, defered_fields=args)
+        Query.class_ = cls
+        Query.db_type = cls.database.db_type
+        return Query(defered_fields=args)
 
     @classmethod
-    def filter(cls, condition):
-        query = cls.select().where(condition).to_sql()
-        query_set = cls.Meta.database.cursor.fetchall(*query)
+    def filter(cls, expr):
+        query = cls.select().where(expr)
+        query_set = query.get()
         query_set = [cls.row_to_object(row) for row in query_set]
         return query_set
 
     @classmethod
     def setup_schema(cls):
         cls.columns = [field[1] for field in cls.fields]
-        cls.Meta.database.create_table(cls)
+        Field.db_type = cls.database.db_type
+        cls.database.create_table(cls)
 
     def __init__(self, **kwargs):
         for name, value in kwargs.items():
-            if value in (True, False) and self.Meta.database.types['BooleanField'] == 'INTEGER':
-                value = 1 if value else 0
             setattr(self, name + '_', value)
 
     def __eq__(self, other):
@@ -71,11 +71,11 @@ class Model(object):
         return self.id_ == other.id_
 
     def insert(self):
-        self.Meta.database.insert_table(self)
-        self.id_ = self.Meta.database.lastrow_id
+        self.database.insert_table(self)
+        self.id_ = self.database.lastrow_id
 
     def update(self):
-        self.Meta.database.update_table(self)
+        self.database.update_table(self)
 
     def save(self):
         if hasattr(self, 'id_'):

@@ -2,17 +2,29 @@ import collections
 
 
 def wrap_sequence(iterable):
-    if len(iterable) == 1:
-        return "(" + str(iterable[0]) + ")"
     iterable = [str(i) for i in iterable]
     st = ", ".join(iterable)
     return "(" + st + ")"
 
 
-def wrap_values(length):
+def wrap_values(db_type):
+    if db_type == 'postgre':
+        return wrap_values_postgre
+    return wrap_values_sqlite
+
+
+def wrap_values_sqlite(length):
     if length == 1:
         return '?'
     st = length * ['?']
+    st = ', '.join(st)
+    return '(' + st + ')'
+
+
+def wrap_values_postgre(length):
+    if length == 1:
+        return "%s"
+    st = length * ["%s"]
     st = ', '.join(st)
     return '(' + st + ')'
 
@@ -23,25 +35,20 @@ class MultipleResultsError(Exception):
 
 class Query(object):
 
-    def __init__(self, class_=None, defered_fields=None, lhs=None,
-                 rhs=None, operator=None):
-        self.class_ = class_
+    db_type = ''
+
+    def __init__(self, defered_fields=None, lhs=None, rhs=None, operator=None):
         self.values = []
         if defered_fields:
             self.defered = ', '.join(defered_fields)
         else:
             self.defered = '*'
         self.lhs = lhs
+        if isinstance(self.lhs, Query):
+            self.append_values(self.lhs)
         self.operator = operator
-        rhs = self.type_check(rhs)
         self.rhs = rhs
         self.append_values(self.rhs)
-
-    def type_check(self, value):
-        if self.class_ is not None:
-            if value in (True, False) and self.class_.Meta.database.types['BooleanField'] == 'INTEGER':
-                return 1 if value else 0
-        return value
 
     def to_sql(self):
         if isinstance(self.lhs, Query):
@@ -52,9 +59,9 @@ class Query(object):
             self.rhs = self.rhs.to_sql()
         else:
             if isinstance(self.rhs, list):
-                self.rhs = wrap_values(len(self.rhs))
+                self.rhs = wrap_values(self.db_type)(len(self.rhs))
             elif self.rhs in self.values:
-                self.rhs = '?'
+                self.rhs = wrap_values(self.db_type)(len([self.rhs]))
             else:
                 self.rhs = str(self.rhs) if self.rhs is not None else ''
         if self.operator is None:
@@ -64,49 +71,33 @@ class Query(object):
     def append_values(self, other):
         if other is None:
             return
-        elif isinstance(other, Query):
+        if isinstance(other, Query):
             self.values.extend(other.values)
         elif isinstance(other, collections.Iterable) and not isinstance(other, str):
             self.values.extend(other)
         else:
             self.values.append(other)
 
-    def where(self, kwargs):
-        lhs = kwargs['lhs']
-        rhs = kwargs['rhs']
-        operator = kwargs['operator']
-        if self.lhs is None:
-            self.lhs = lhs
-            self.operator = operator
-            self.rhs = self.type_check(rhs)
-            if isinstance(self.lhs, Query):
-                self.append_values(self.lhs)
-            self.append_values(self.rhs)
-        else:
-            self.lhs = Query(class_=self.class_, lhs=self.lhs,
-                             operator=self.operator, rhs=self.rhs)
-            self.rhs = Query(class_=self.class_, lhs=lhs,
-                             operator=operator, rhs=rhs)
-            self.operator = ' AND '
-            self.append_values(self.rhs)
+    def where(self, query):
+        query.defered = self.defered
+        self = query
         return self
 
     def limit(self, lim):
-        self.lhs = Query(class_=self.class_, lhs=self.lhs,
-                         operator=self.operator, rhs=self.rhs)
-        self.rhs = '?'
-        self.operator = ' LIMIT '
-        self.values.append(lim)
+        self = Query(defered_fields=self.defered, lhs=self, operator=' LIMIT ',
+                     rhs=lim)
         return self
 
     def prepare_select(self):
-        query = 'SELECT {} FROM {} WHERE '.format(self.defered, self.class_.table_name)
+        query = 'SELECT {} FROM {}'.format(self.defered, self.class_.table_name)
+        if self.values:
+            query += ' WHERE '
         query += self.to_sql()
         self.return_object = False if self.defered != '*' else True
         return query, tuple(self.values)
 
     def get(self):
-        cursor = self.class_.Meta.database.cursor
+        cursor = self.class_.database.cursor
         cursor.execute(*self.prepare_select())
         row = cursor.fetchone()
         if row is None:
@@ -119,7 +110,7 @@ class Query(object):
             row = cursor.fetchone()
 
     def one(self):
-        cursor = self.class_.Meta.database.cursor
+        cursor = self.class_.database.cursor
         cursor.execute(*self.prepare_select())
         row = cursor.fetchone()
         if self.return_object:
@@ -129,7 +120,7 @@ class Query(object):
         return row
 
     def first(self):
-        cursor = self.class_.Meta.database.cursor
+        cursor = self.class_.database.cursor
         cursor.execute(*self.prepare_select())
         row = cursor.fetchone()
         if self.return_object:

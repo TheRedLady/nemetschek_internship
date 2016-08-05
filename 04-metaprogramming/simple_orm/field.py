@@ -1,21 +1,39 @@
 from query import Query
+import copy
 
 
-def or_(left, right):
-    left = Query(lhs=left['lhs'], operator=left['operator'], rhs=left['rhs'])
-    right = Query(lhs=right['lhs'], operator=right['operator'], rhs=right['rhs'])
-    return make_expression(None, left, ' OR ', right)
+data_types = {'sqlite': {'IntField': 'INTEGER', 'CharField': 'TEXT',
+                         'BooleanField': 'INTEGER',
+                         'AutoField': 'INTEGER PRIMARY KEY'},
+              'postgre': {'IntField': 'INTEGER', 'CharField': 'TEXT',
+                          'BooleanField': 'BOOLEAN', 'AutoField': 'Serial'}}
+
+func_types = {'sqlite': {'to_lowercase': 'LOWER', 'to_uppercase': 'UPPER',
+                         'max': 'MAX', 'avg': 'AVG'},
+              'postgre': {'to_lowercase': 'LOWER', 'to_uppercase': 'UPPER',
+                          'max': 'MAX', 'avg': 'AVG'}}
 
 
-def and_(left, right):
-    left = Query(lhs=left['lhs'], operator=left['operator'], rhs=left['rhs'])
-    right = Query(lhs=right['lhs'], operator=right['operator'], rhs=right['rhs'])
-    return make_expression(None, left, ' AND ', right)
+def dbfunc(db_type):
+    def wrapper(func):
+        def decorator(field):
+            new_field = copy.copy(field)
+            new_field.name = func_types[db_type][func.__name__] + "(" + field.name + ")"
+            return func(new_field)
+        return decorator
+    return wrapper
 
 
-def make_expression(field, lhs, operator, rhs):
-    expr = {'lhs': lhs, 'operator': operator, 'rhs': rhs}
-    return expr
+def or_(*args):
+    if len(args) == 2:
+        return Query(lhs=args[0], rhs=args[1], operator=' OR ')
+    return Query(lhs=args[0], rhs=or_(*args[1::]), operator=' OR ')
+
+
+def and_(*args):
+    if len(args) == 2:
+        return Query(lhs=args[0], rhs=args[1], operator=' AND ')
+    return Query(lhs=args[0], rhs=and_(*args[1::]), operator=' AND ')
 
 
 class ValidationError(Exception):
@@ -23,6 +41,8 @@ class ValidationError(Exception):
 
 
 class Field(object):
+
+    db_type = None
 
     creation_counter = 1
 
@@ -60,47 +80,51 @@ class Field(object):
     def __eq__(self, other):
         if isinstance(other, type(self)):
             return self.value == other.value
-        return make_expression(self, self.name, ' = ', other)
+        return Query(lhs=self.name, operator=' = ', rhs=other)
 
     def __ne__(self, other):
         if isinstance(other, type(self)):
             return self.value != other.value
-        return make_expression(self, 'NOT ' + self.name, ' = ', other)
+        return Query(lhs='NOT ' + self.name, operator=' = ', rhs=other)
 
     def __lt__(self, other):
         if isinstance(other, type(self)):
             return self.value < other.value
-        return make_expression(self, self.name, ' < ', other)
+        return Query(lhs=self.name, operator=' < ', rhs=other)
 
     def __le__(self, other):
         if isinstance(other, type(self)):
             return self.value <= other.value
-        return make_expression(self, self.name, ' <= ', other)
+        return Query(lhs=self.name, operator=' <= ', rhs=other)
 
     def __gt__(self, other):
         if isinstance(other, type(self)):
             return self.value > other.value
-        return make_expression(self, self.name, ' > ', other)
+        return Query(lhs=self.name, operator=' > ', rhs=other)
 
     def __ge__(self, other):
         if isinstance(other, type(self)):
             return self.value >= other.value
-        return make_expression(self, self.name, ' >= ', other)
+        return Query(lhs=self.name, operator=' >= ', rhs=other)
 
     def in_(self, *values):
-        return make_expression(self, self.name, ' IN ', list(values))
+        return Query(lhs=self.name, operator=' IN ', rhs=list(values))
 
     def startswith(self, value):
         value = value + "%"
-        return make_expression(self, self.name, ' LIKE ', value)
+        return Query(lhs=self.name, operator=' LIKE ', rhs=value)
 
     def endswith(self, value):
         value = "%" + value
-        return make_expression(self, self.name, ' LIKE ', value)
+        return Query(lhs=self.name, operator=' LIKE ', rhs=value)
 
     def contains(self, substring):
         substring = "%" + substring + "%"
-        return make_expression(self, self.name, ' LIKE ', substring)
+        return Query(lhs=self.name, operator=' LIKE ', rhs=substring)
+
+    @property
+    def db_field_type(self):
+        return data_types[self.db_type][self.__class__.__name__]
 
 
 class IntField(Field):
@@ -156,6 +180,4 @@ class BooleanField(Field):
 
 class AutoField(IntField):
     pass
-
-
 
