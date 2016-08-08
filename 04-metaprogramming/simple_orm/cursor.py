@@ -1,7 +1,23 @@
 import sqlite3
 import psycopg2
+import MySQLdb
+import copy
+
 from field import BooleanField
 from query import wrap_dict, wrap_sequence
+
+
+connections = {'postgre': psycopg2, 'sqlite': sqlite3, 'mysql': MySQLdb}
+
+
+def dbfunc(db_type):
+    def wrapper(func):
+        def dec(field):
+            new_field = copy.copy(field)
+            new_field.name = func(field)
+            return new_field
+        return dec
+    return wrapper
 
 
 class UnsupportedDBMSError(Exception):
@@ -10,20 +26,11 @@ class UnsupportedDBMSError(Exception):
 
 class Cursor(object):
 
-    db_types = ['postgre', 'sqlite']
-
-    def __init__(self, db_type, dsn=None, user=None, password=None, port=None,
-                 host=None, database=None):
-        if db_type not in self.db_types:
+    def __init__(self, db_type, **connection_parameters):
+        if db_type not in connections:
             raise UnsupportedDBMSError
-        if db_type == 'sqlite':
-            if dsn is None:
-                dsn = ':memory:'
-            self.connection = sqlite3.connect(dsn)
-        else:
-            self.connection = psycopg2.connect(database=database, user=user,
-                                               port=port, password=password, host=host)
         self.db_type = db_type
+        self.connection = connections[db_type].connect(**connection_parameters)
         self.cursor = self.connection.cursor()
 
     def create_table(self, class_):

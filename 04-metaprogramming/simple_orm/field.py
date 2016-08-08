@@ -6,22 +6,10 @@ data_types = {'sqlite': {'IntField': 'INTEGER', 'CharField': 'TEXT',
                          'BooleanField': 'INTEGER',
                          'AutoField': 'INTEGER PRIMARY KEY'},
               'postgre': {'IntField': 'INTEGER', 'CharField': 'TEXT',
-                          'BooleanField': 'BOOLEAN', 'AutoField': 'Serial'}}
-
-func_types = {'sqlite': {'to_lowercase': 'LOWER', 'to_uppercase': 'UPPER',
-                         'max': 'MAX', 'avg': 'AVG'},
-              'postgre': {'to_lowercase': 'LOWER', 'to_uppercase': 'UPPER',
-                          'max': 'MAX', 'avg': 'AVG'}}
-
-
-def dbfunc(db_type):
-    def wrapper(func):
-        def decorator(field):
-            new_field = copy.copy(field)
-            new_field.name = func_types[db_type][func.__name__] + "(" + field.name + ")"
-            return func(new_field)
-        return decorator
-    return wrapper
+                          'BooleanField': 'BOOLEAN', 'AutoField': 'Serial'},
+              'mysql': {'IntField': 'INTEGER', 'CharField': 'TEXT',
+                         'BooleanField': 'TINYINT',
+                         'AutoField': 'INTEGER AUTO_INCREMENT'}}
 
 
 def or_(*args):
@@ -124,7 +112,15 @@ class Field(object):
 
     @property
     def db_field_type(self):
-        return data_types[self.db_type][self.__class__.__name__]
+        type_ = data_types[self.db_type][self.__class__.__name__]
+        if self.primary_key:
+            if not (self.db_type == 'sqlite' and isinstance(self, AutoField)):
+                type_ += ' PRIMARY KEY'
+        if not self.null:
+            type_ += ' NOT NULL'
+        if self.default is not None:
+            type_ += ' DEFAULT {}'.format(self.default)
+        return type_
 
 
 class IntField(Field):

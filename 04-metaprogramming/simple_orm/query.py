@@ -3,23 +3,23 @@ import collections
 
 def wrap_sequence(iterable):
     iterable = [str(i) for i in iterable]
-    st = ", ".join(iterable)
-    return "(" + st + ")"
+    st = ', '.join(iterable)
+    return '(' + st + ')'
 
 
-def wrap_dict_sqlite(names):
-    dict_names = [":" + str(name) for name in names]
-    dict_names = ", ".join(dict_names)
-    return "(" + dict_names + ")"
+def wrap_dict_colon(names):
+    dict_names = [':' + str(name) for name in names]
+    dict_names = ', '.join(dict_names)
+    return '(' + dict_names + ')'
 
 
-def wrap_dict_postgre(names):
-    dict_names = ["%(" + str(name) + ")s" for name in names]
-    dict_names = ", ".join(dict_names)
-    return "(" + dict_names + ")"
+def wrap_dict_percent(names):
+    dict_names = ['%(' + str(name) + ')s' for name in names]
+    dict_names = ', '.join(dict_names)
+    return '(' + dict_names + ')'
 
 
-def wrap_values_sqlite(length):
+def wrap_values_question_marks(length):
     if length == 1:
         return '?'
     st = length * ['?']
@@ -27,7 +27,7 @@ def wrap_values_sqlite(length):
     return '(' + st + ')'
 
 
-def wrap_values_postgre(length):
+def wrap_values_percent(length):
     if length == 1:
         return "%s"
     st = length * ["%s"]
@@ -35,8 +35,10 @@ def wrap_values_postgre(length):
     return '(' + st + ')'
 
 
-wrap_values = {'sqlite': wrap_values_sqlite, 'postgre': wrap_values_postgre}
-wrap_dict = {'sqlite': wrap_dict_sqlite, 'postgre': wrap_dict_postgre}
+wrap_values = {'sqlite': wrap_values_question_marks, 'postgre': wrap_values_percent,
+               'mysql': wrap_values_percent}
+wrap_dict = {'sqlite': wrap_dict_colon, 'postgre': wrap_dict_percent,
+             'mysql': wrap_dict_percent}
 
 
 class MultipleResultsError(Exception):

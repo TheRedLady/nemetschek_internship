@@ -19,7 +19,7 @@ class ModelMetaclass(type):
                 columns.extend(parent.fields)
         columns.sort()
         class_dict['fields'] = columns
-        class_dict['table_name'] = '"' + classname.lower() + '"'
+        class_dict['table_name'] = classname.lower()
         return type.__new__(metaclass, classname, bases, class_dict)
 
 
@@ -57,6 +57,8 @@ class Model(object):
 
     @classmethod
     def setup_schema(cls):
+        if cls.database.db_type == 'postgre':
+            cls.table_name = '"' + cls.table_name + '"'
         cls.columns = [field[1] for field in cls.fields]
         Field.db_type = cls.database.db_type
         cls.database.create_table(cls)
