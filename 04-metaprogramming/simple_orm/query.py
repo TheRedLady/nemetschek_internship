@@ -1,53 +1,11 @@
 import collections
 
 
-def wrap_sequence(iterable):
-    iterable = [str(i) for i in iterable]
-    st = ', '.join(iterable)
-    return '(' + st + ')'
-
-
-def wrap_dict_colon(names):
-    dict_names = [':' + str(name) for name in names]
-    dict_names = ', '.join(dict_names)
-    return '(' + dict_names + ')'
-
-
-def wrap_dict_percent(names):
-    dict_names = ['%(' + str(name) + ')s' for name in names]
-    dict_names = ', '.join(dict_names)
-    return '(' + dict_names + ')'
-
-
-def wrap_values_question_marks(length):
-    if length == 1:
-        return '?'
-    st = length * ['?']
-    st = ', '.join(st)
-    return '(' + st + ')'
-
-
-def wrap_values_percent(length):
-    if length == 1:
-        return "%s"
-    st = length * ["%s"]
-    st = ', '.join(st)
-    return '(' + st + ')'
-
-
-wrap_values = {'sqlite': wrap_values_question_marks, 'postgre': wrap_values_percent,
-               'mysql': wrap_values_percent}
-wrap_dict = {'sqlite': wrap_dict_colon, 'postgre': wrap_dict_percent,
-             'mysql': wrap_dict_percent}
-
-
 class MultipleResultsError(Exception):
     pass
 
 
 class Query(object):
-
-    db_type = ''
 
     def __init__(self, defered_fields=None, lhs=None, rhs=None, operator=None):
         self.values = []
@@ -71,9 +29,9 @@ class Query(object):
             self.rhs = self.rhs.to_sql()
         else:
             if isinstance(self.rhs, list):
-                self.rhs = wrap_values[self.db_type](len(self.rhs))
+                self.rhs = self.class_.database.wrap_values(len(self.rhs))
             elif self.rhs in self.values:
-                self.rhs = wrap_values[self.db_type](len([self.rhs]))
+                self.rhs = self.class_.database.wrap_values(len([self.rhs]))
             else:
                 self.rhs = str(self.rhs) if self.rhs is not None else ''
         if self.operator is None:
@@ -101,7 +59,9 @@ class Query(object):
         return self
 
     def prepare_select(self):
-        query = 'SELECT {} FROM {}'.format(self.defered, self.class_.table_name)
+        table_name = self.class_.table_name
+        table_name = self.class_.database.table_name(table_name)
+        query = 'SELECT {} FROM {}'.format(self.defered, table_name)
         if self.values:
             query += ' WHERE '
         query += self.to_sql()

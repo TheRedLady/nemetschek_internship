@@ -1,5 +1,6 @@
 import unittest
 import collections
+import psycopg2
 
 import cursor
 import query
@@ -15,9 +16,32 @@ def setUp(rows):
 
 db_type = 'postgre'
 
+class PostgreDatabase(cursor.Database):
+
+    data_types = {'IntField': 'INTEGER', 'CharField': 'TEXT',
+                  'BooleanField': 'BOOLEAN', 'AutoField': 'Serial'}
+
+    def __init__(self, **connection_parameters):
+        self.connection = psycopg2.connect(**connection_parameters)
+        self.cursor = self.connection.cursor()
+
+    def wrap_dict(self, names):
+        dict_names = ['%(' + str(name) + ')s' for name in names]
+        dict_names = ', '.join(dict_names)
+        return '(' + dict_names + ')'
+
+    def table_name(self, table_name):
+        return '"' + table_name + '"'
+
+    @property
+    def lastrow_id(self):
+        self.cursor.execute('select lastval()')
+        return self.cursor.fetchone()[0]
+
 
 class User(model.Model):
-    database = Injected('database')
+    database = PostgreDatabase(database='postgres', user='postgres',
+                               password='postgres', host='localhost', port=5432)
 
     name = field.CharField()
     age = field.IntField()
@@ -154,8 +178,7 @@ class TestDB(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    Injected.inject(db_type=db_type, database='postgres', user='postgres',
-                    password='postgres', host='localhost', port=5432)
+    PostgreDatabase.placeholder = '%s'
     User.setup_schema()
     setUp(users)
     unittest.main()

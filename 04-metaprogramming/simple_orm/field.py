@@ -2,16 +2,6 @@ from query import Query
 import copy
 
 
-data_types = {'sqlite': {'IntField': 'INTEGER', 'CharField': 'TEXT',
-                         'BooleanField': 'INTEGER',
-                         'AutoField': 'INTEGER PRIMARY KEY'},
-              'postgre': {'IntField': 'INTEGER', 'CharField': 'TEXT',
-                          'BooleanField': 'BOOLEAN', 'AutoField': 'Serial'},
-              'mysql': {'IntField': 'INTEGER', 'CharField': 'TEXT',
-                         'BooleanField': 'TINYINT',
-                         'AutoField': 'INTEGER AUTO_INCREMENT'}}
-
-
 def or_(*args):
     if len(args) == 2:
         return Query(lhs=args[0], rhs=args[1], operator=' OR ')
@@ -29,8 +19,6 @@ class ValidationError(Exception):
 
 
 class Field(object):
-
-    db_type = None
 
     creation_counter = 1
 
@@ -55,6 +43,8 @@ class Field(object):
         else:
             if hasattr(obj, self.name + '_'):
                 return getattr(obj, self.name + '_')
+            elif self.default is not None:
+                return self.default
             else:
                 raise AttributeError
 
@@ -110,6 +100,7 @@ class Field(object):
         substring = "%" + substring + "%"
         return Query(lhs=self.name, operator=' LIKE ', rhs=substring)
 
+    '''
     @property
     def db_field_type(self):
         type_ = data_types[self.db_type][self.__class__.__name__]
@@ -121,6 +112,7 @@ class Field(object):
         if self.default is not None:
             type_ += ' DEFAULT {}'.format(self.default)
         return type_
+    '''
 
 
 class IntField(Field):
@@ -164,7 +156,12 @@ class BooleanField(Field):
     def __get__(self, obj, type=None):
         if obj is None:
             return self
-        return bool(getattr(obj, self.name + '_'))
+        if hasattr(obj, self.name + '_'):
+            return bool(getattr(obj, self.name + '_'))
+        if self.default is not None:
+            return self.default
+        else:
+            raise AttributeError
 
     def __set__(self, obj, value):
         self.validate(value)

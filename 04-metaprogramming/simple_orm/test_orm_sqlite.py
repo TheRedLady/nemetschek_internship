@@ -1,11 +1,11 @@
 import unittest
 import collections
+import sqlite3
 
 import cursor
 import query
 import field as field
 import simple_orm as model
-from inject import Injected
 
 
 def setUp(rows):
@@ -15,9 +15,23 @@ def setUp(rows):
 
 db_type = 'sqlite'
 
+class SqliteDatabase(cursor.Database):
+
+    data_types = {'IntField': 'INTEGER', 'CharField': 'TEXT',
+                  'BooleanField': 'INTEGER', 'AutoField': 'INTEGER'}
+
+    def __init__(self, database):
+        self.connection = sqlite3.connect(database)
+        self.cursor = self.connection.cursor()
+
+    def boolean(self, value):
+        if value in (True, False):
+            return 1 if value else 0
+        return value
+
 
 class User(model.Model):
-    database = Injected('database')
+    database = SqliteDatabase(':memory:')
 
     name = field.CharField()
     age = field.IntField()
@@ -154,7 +168,6 @@ class TestDB(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    Injected.inject(db_type=db_type, database=':memory:')
     User.setup_schema()
     setUp(users)
     unittest.main()

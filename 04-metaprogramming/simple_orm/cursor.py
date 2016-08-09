@@ -1,13 +1,13 @@
-import sqlite3
-import psycopg2
-import MySQLdb
 import copy
 
+
 from field import BooleanField
-from query import wrap_dict, wrap_sequence
 
 
-connections = {'postgre': psycopg2, 'sqlite': sqlite3, 'mysql': MySQLdb}
+def wrap_sequence(iterable):
+    iterable = [str(i) for i in iterable]
+    st = ', '.join(iterable)
+    return '(' + st + ')'
 
 
 def dbfunc(db_type):
@@ -24,32 +24,59 @@ class UnsupportedDBMSError(Exception):
     pass
 
 
-class Cursor(object):
+class Database(object):
 
-    def __init__(self, db_type, **connection_parameters):
-        if db_type not in connections:
-            raise UnsupportedDBMSError
-        self.db_type = db_type
-        self.connection = connections[db_type].connect(**connection_parameters)
-        self.cursor = self.connection.cursor()
+    data_types = {}
+    placeholder = '?'
+
+    def __init__(self, **connection_parameters):
+        pass
+
+    def _assemble_field_type(self, field):
+        type_ = self.data_types[field.__class__.__name__]
+        if field.primary_key:
+            type_ += ' PRIMARY KEY'
+        if not field.null:
+            type_ += ' NOT NULL'
+        if field.default is not None:
+            type_ += ' DEFAULT {}'.format(field.default)
+        return type_
+
+    def table_name(self, table_name):
+        return table_name
+
+    def type_check(self, value):
+        return value
+
+    def wrap_dict(self, names):
+        dict_names = [':' + str(name) for name in names]
+        dict_names = ', '.join(dict_names)
+        return '(' + dict_names + ')'
+
+    def wrap_values(self, length):
+        if length == 1:
+            return self.placeholder
+        st = length * [self.placeholder]
+        st = ', '.join(st)
+        return '(' + st + ')'
 
     def create_table(self, class_):
         query = ''
         for c in class_.columns:
             if query:
                 query += ', '
-            query += c.name + ' ' + c.db_field_type
-        query = 'CREATE TABLE {} ({})'.format(class_.table_name, query)
+            query += c.name + ' ' + self._assemble_field_type(c)
+        query = 'CREATE TABLE {} ({})'.format(self.table_name(class_.table_name), query)
         self.cursor.execute(query)
 
     def update_table(self, obj):
-        query = 'UPDATE {} SET '.format(obj.table_name)
+        query = 'UPDATE {} SET '.format(self.table_name(obj.table_name))
         for field in obj.columns:
-            self.cursor.execute(query + field.name + ' = ' + wrap_dict[self.db_type](field.name) + ' WHERE id = :id',
-            {field.name: getattr(obj, field.name + '_'), 'id': obj.id_})
+            self.cursor.execute(query + field.name + ' = ' + self.wrap_dict([field.name]) + ' WHERE id = :id',
+            {field.name: self.type_check(getattr(obj, field.name + '_')), 'id': obj.id_})
 
     def insert_table(self, obj):
-        query = 'INSERT INTO {} '.format(obj.table_name)
+        query = 'INSERT INTO {} '.format(self.table_name(obj.table_name))
         field_names = []
         values_dict = {}
         for field in obj.columns:
@@ -57,17 +84,11 @@ class Cursor(object):
                 continue
             field_names.append(field.name)
             value = getattr(obj, field.name + '_')
-            values_dict[field.name] = value
+            values_dict[field.name] = self.type_check(value)
         query += wrap_sequence(field_names)
-        field_names = wrap_dict[self.db_type](field_names)
+        field_names = self.wrap_dict(field_names)
         self.cursor.execute(query + ' VALUES ' + field_names, values_dict)
 
     @property
     def lastrow_id(self):
-        if self.db_type == 'postgre':
-            self.cursor.execute('select lastval()')
-            id = self.cursor.fetchone()[0]
-        else:
-            id = self.cursor.lastrowid
-        return id
-
+        return self.cursor.lastrowid

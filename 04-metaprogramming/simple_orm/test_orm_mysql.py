@@ -1,5 +1,6 @@
 import unittest
 import collections
+import MySQLdb
 
 import cursor
 import query
@@ -16,8 +17,28 @@ def setUp(rows):
 db_type = 'mysql'
 
 
+class MySQLDatabase(cursor.Database):
+
+    data_types = {'IntField': 'INTEGER', 'CharField': 'TEXT',
+                  'BooleanField': 'TINYINT', 'AutoField': 'INTEGER AUTO_INCREMENT'}
+
+    def __init__(self, **connection_parameters):
+        self.connection = MySQLdb.connect(**connection_parameters)
+        self.cursor = self.connection.cursor()
+
+    def wrap_dict(self, names):
+        dict_names = ['%(' + str(name) + ')s' for name in names]
+        dict_names = ', '.join(dict_names)
+        return '(' + dict_names + ')'
+
+    def boolean(self, value):
+        if value in (True, False):
+            return 1 if value else 0
+        return value
+
+
 class User(model.Model):
-    database = Injected('database')
+    database = MySQLDatabase(host="localhost", user="tony", passwd="pass", db="people")
 
     name = field.CharField()
     age = field.IntField()
@@ -161,7 +182,7 @@ class TestDB(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    Injected.inject(db_type=db_type, host="localhost", user="tony", passwd="pass", db="people")
+    MySQLDatabase.placeholder = '%s'
     User.setup_schema()
     setUp(users)
     unittest.main()
