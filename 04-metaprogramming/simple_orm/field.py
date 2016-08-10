@@ -100,20 +100,6 @@ class Field(object):
         substring = "%" + substring + "%"
         return Query(lhs=self.name, operator=' LIKE ', rhs=substring)
 
-    '''
-    @property
-    def db_field_type(self):
-        type_ = data_types[self.db_type][self.__class__.__name__]
-        if self.primary_key:
-            if not (self.db_type == 'sqlite' and isinstance(self, AutoField)):
-                type_ += ' PRIMARY KEY'
-        if not self.null:
-            type_ += ' NOT NULL'
-        if self.default is not None:
-            type_ += ' DEFAULT {}'.format(self.default)
-        return type_
-    '''
-
 
 class IntField(Field):
 
@@ -150,14 +136,14 @@ class BooleanField(Field):
         if value is None:
             if self.primary_key or not self.null:
                 raise ValidationError
-        if value not in (True, False, 0, 1):
+        if not (value is True or value is False):
             raise ValidationError
 
     def __get__(self, obj, type=None):
         if obj is None:
             return self
         if hasattr(obj, self.name + '_'):
-            return bool(getattr(obj, self.name + '_'))
+            return getattr(obj, self.name + '_')
         if self.default is not None:
             return self.default
         else:

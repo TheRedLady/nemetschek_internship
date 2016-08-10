@@ -2,11 +2,10 @@ import unittest
 import collections
 import MySQLdb
 
-import cursor
+import database
 import query
-import field as field
-import simple_orm as model
-from inject import Injected
+import field
+import model
 
 
 def setUp(rows):
@@ -14,13 +13,12 @@ def setUp(rows):
         row.save()
 
 
-db_type = 'mysql'
-
-
-class MySQLDatabase(cursor.Database):
+class MySQLDatabase(database.Database):
 
     data_types = {'IntField': 'INTEGER', 'CharField': 'TEXT',
                   'BooleanField': 'TINYINT', 'AutoField': 'INTEGER AUTO_INCREMENT'}
+
+    placeholder = '%s'
 
     def __init__(self, **connection_parameters):
         self.connection = MySQLdb.connect(**connection_parameters)
@@ -31,31 +29,35 @@ class MySQLDatabase(cursor.Database):
         dict_names = ', '.join(dict_names)
         return '(' + dict_names + ')'
 
-    def boolean(self, value):
+    def type_check(self, value):
         if value in (True, False):
             return 1 if value else 0
         return value
 
 
 class User(model.Model):
-    database = MySQLDatabase(host="localhost", user="tony", passwd="pass", db="people")
+    database = MySQLDatabase(host="localhost", user="tony", passwd="pass",
+                             db="people")
 
     name = field.CharField()
     age = field.IntField()
     is_active = field.BooleanField()
 
 
-@cursor.dbfunc(db_type)
+db_type = 'mysql'
+
+
+@database.dbfunc(db_type)
 def sum(field):
     return 'SUM(' + field.name + ')'
 
 
-@cursor.dbfunc(db_type)
+@database.dbfunc(db_type)
 def max(field):
     return 'MAX(' + field.name + ')'
 
 
-@cursor.dbfunc(db_type)
+@database.dbfunc(db_type)
 def to_lowercase(field):
     return 'LOWER(' + field.name + ')'
 
@@ -182,7 +184,6 @@ class TestDB(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    MySQLDatabase.placeholder = '%s'
     User.setup_schema()
     setUp(users)
     unittest.main()

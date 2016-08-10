@@ -2,10 +2,10 @@ import unittest
 import collections
 import sqlite3
 
-import cursor
+import database
 import query
-import field as field
-import simple_orm as model
+import field
+import model
 
 
 def setUp(rows):
@@ -13,9 +13,7 @@ def setUp(rows):
         row.save()
 
 
-db_type = 'sqlite'
-
-class SqliteDatabase(cursor.Database):
+class SqliteDatabase(database.Database):
 
     data_types = {'IntField': 'INTEGER', 'CharField': 'TEXT',
                   'BooleanField': 'INTEGER', 'AutoField': 'INTEGER'}
@@ -24,7 +22,7 @@ class SqliteDatabase(cursor.Database):
         self.connection = sqlite3.connect(database)
         self.cursor = self.connection.cursor()
 
-    def boolean(self, value):
+    def type_check(self, value):
         if value in (True, False):
             return 1 if value else 0
         return value
@@ -38,12 +36,15 @@ class User(model.Model):
     is_active = field.BooleanField()
 
 
-@cursor.dbfunc(db_type)
+db_type = 'sqlite'
+
+
+@database.dbfunc(db_type)
 def max(field):
     return 'max(' + field.name + ')'
 
 
-@cursor.dbfunc(db_type)
+@database.dbfunc(db_type)
 def to_lowercase(field):
     return 'lower(' + field.name + ')'
 

@@ -2,10 +2,10 @@ import unittest
 import collections
 import psycopg2
 
-import cursor
+import database
 import query
-import field as field
-import simple_orm as model
+import field
+import model
 from inject import Injected
 
 
@@ -14,12 +14,12 @@ def setUp(rows):
         row.save()
 
 
-db_type = 'postgre'
-
-class PostgreDatabase(cursor.Database):
+class PostgreDatabase(database.Database):
 
     data_types = {'IntField': 'INTEGER', 'CharField': 'TEXT',
                   'BooleanField': 'BOOLEAN', 'AutoField': 'Serial'}
+
+    placeholder = '%s'
 
     def __init__(self, **connection_parameters):
         self.connection = psycopg2.connect(**connection_parameters)
@@ -48,12 +48,15 @@ class User(model.Model):
     is_active = field.BooleanField()
 
 
-@cursor.dbfunc(db_type)
+db_type = 'postgre'
+
+
+@database.dbfunc(db_type)
 def min(field):
     return 'MIN(' + field.name + ')'
 
 
-@cursor.dbfunc(db_type)
+@database.dbfunc(db_type)
 def to_lowercase(field):
     return 'LOWER(' + field.name + ')'
 
@@ -178,7 +181,6 @@ class TestDB(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    PostgreDatabase.placeholder = '%s'
     User.setup_schema()
     setUp(users)
     unittest.main()

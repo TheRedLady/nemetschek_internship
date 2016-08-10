@@ -46,6 +46,7 @@ class Query(object):
         elif isinstance(other, collections.Iterable) and not isinstance(other, str):
             self.values.extend(other)
         else:
+            other = self.class_.database.type_check(other)
             self.values.append(other)
 
     def where(self, query):

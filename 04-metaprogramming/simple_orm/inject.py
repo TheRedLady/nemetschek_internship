@@ -1,4 +1,3 @@
-from cursor import Database
 
 
 class Injected(object):
@@ -8,7 +7,9 @@ class Injected(object):
 
     @classmethod
     def inject(cls, **injected):
-        cls.injected_value = Database(**injected)
+        for name, value in injected.iteritems():
+            for field in cls.injected.get(name, []):
+                field.injected_value = value
 
     def __init__(self, service_name):
         self.service_name = service_name
@@ -23,5 +24,4 @@ class Injected(object):
 
     def __set__(self, obj, val):
         raise Exception('Cannot set injectable')
-
 
