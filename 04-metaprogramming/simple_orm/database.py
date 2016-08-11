@@ -27,6 +27,7 @@ class Database(object):
     placeholder = '?'
 
     def __init__(self, **connection_parameters):
+        ''' establish connection'''
         pass
 
     def _assemble_field_type(self, field):
