@@ -29,6 +29,16 @@ class ResultsView(generic.DetailView):
     template_name = 'polls/results.html'
 
 
+class PopularView(generic.ListView):
+    template_name = 'polls/popular.html'
+    context_object_name = 'popular_question_list'
+
+    def get_queryset(self):
+        query_set = Question.objects.all()
+        query_set = [q for q in query_set if q.is_popular()]
+        return query_set
+
+
 def vote(request, question_id):
     question = get_object_or_404(Question, pk=question_id)
     try:
