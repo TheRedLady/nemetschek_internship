@@ -1,0 +1,14 @@
+{% load static %}
+
+<link rel="stylesheet" type="text/css" href="{% static 'blog/style.css' %}" />
+
+{% if post_feed %}
+  <ul>
+  {% for post in post_feed %}
+  <li><a href="{% url 'blog:detail' post.id %}">{{ post.content|truncatewords:"20" }} </a></li>
+  {% endfor %}
+  </ul>
+{% else %}
+  <p> No posts are available.</p>
+{% endif %}
+

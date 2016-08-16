@@ -1,0 +1,5 @@
+<h1>{{ post.content }}</h1>
+{% for tag in post.tag.all %}
+<b> #{{ tag }} </b>
+{% endfor %}
+<p>{{ post.pub_date }}</p>
